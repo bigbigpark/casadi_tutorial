@@ -8,7 +8,7 @@
 
 ## Overview
 
-모든 내용은 제 root 경로에 있는 **[casadi-users_guide.pdf](/casadi-users_guide.pdf)**를 기준으로 만들어졌습니다. <br/>
+모든 내용은 제 root 경로에 있는 [casadi-users_guide](/casadi-users_guide.pdf)를 기준으로 만들어졌습니다. <br/>
 
 
 
