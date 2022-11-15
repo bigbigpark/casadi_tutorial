@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#-*-coding:utf-8 -*-
 import rospy
 import casadi as ca
 import numpy as np
@@ -9,19 +10,18 @@ import utilities
 from nav_msgs.msg import Odometry
 from nav_msgs.msg import Path
 from geometry_msgs.msg import Twist, PoseStamped
-# from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 class MobileRobotNMPC:
   def __init__(self, init_pose):
     self.dt = 0.1          # time step
     self.N = 20            # horizon length
 
-    self.Q = np.diag([50.0, 50.0, 10.0]) # Weight matrix for states  
-    self.R = np.diag([1.0, 1.0])    # Weight matrix for controls
+    self.Q = np.diag([0.1, 0.1, 0.01]) # Weight matrix for states  
+    self.R = np.diag([0.1, 0.1])    # Weight matrix for controls
     
-    # Constraints
-    self.min_v = -1.0
-    self.max_v =  1.0
+    # Boundary constant for the constraints
+    self.min_v = -2.0
+    self.max_v =  2.0
     self.min_w = -0.7854
     self.max_w =  0.7854
 
@@ -41,7 +41,7 @@ class MobileRobotNMPC:
     self.cmd_vel_pub_ = rospy.Publisher('/rbt1/jackal_velocity_controller/cmd_vel', Twist, queue_size=1)
     self.predict_path_pub_ = rospy.Publisher('/rbt1/predicted_path', Path, queue_size=1)
     
-    self.xpose = np.zeros((3,1))
+    self.xpose = np.array([0.0, 0.0, 0.0])
     
     print('init success !')
     pass
@@ -51,10 +51,12 @@ class MobileRobotNMPC:
                                                        msg.pose.pose.orientation.y,
                                                        msg.pose.pose.orientation.z,
                                                        msg.pose.pose.orientation.w,)
+    
     self.xpose[0] = msg.pose.pose.position.x
     self.xpose[1] = msg.pose.pose.position.y
     self.xpose[2] = yaw
-    # print('xpose: {}'.format(self.xpose))
+    
+    # print('xpose: ', self.xpose)
     
   def setup_controller(self):
     self.opti = ca.Opti()
@@ -121,7 +123,11 @@ class MobileRobotNMPC:
     self.opti.solver('ipopt', options)
     
   def solve(self, ref_traj):
-    ref_controls = np.zeros((self.N, 2))
+    ref_controls = np.ones((self.N, 2))*0.2
+    ref_controls[:,1] = 0.0
+    
+    ref_traj[0] = self.xpose
+    print(ref_traj[0])
     
     # set parameter, here only update initial state of x (x0)
     self.opti.set_value(self.opt_states_ref, ref_traj)
@@ -134,22 +140,29 @@ class MobileRobotNMPC:
     # solve the problem
     sol = self.opti.solve()
     
-    cmd_vel = sol.value(self.opt_controls)
-    self.next_states = sol.value(self.opt_states)
+    # obtain the control input
+    u_res = sol.value(self.opt_controls)
+    x_m   = sol.value(self.opt_states)
     
-    v = cmd_vel[0][0]
-    w = cmd_vel[0][1]
+    self.u0 = sol.value(self.opt_controls)
+    self.next_states = sol.value(self.opt_states)
+
+    v = u_res[0][0]
+    w = u_res[0][1]
+    
     return v, w
 
   def generate_ref_traj(self, time_stamp):
     ref_traj = np.zeros((self.N+1, 3))
-    nominal_speed = 0.2
+    nominal_speed = 0.5
     
     for i in range(np.shape(ref_traj)[0]):
-      ref_traj[i,0] = nominal_speed*(time_stamp + i*nominal_speed)  # ref_x
-      ref_traj[i,1] = 0.0  # ref_y
-      ref_traj[i,2] = 0.0  # ref_theta
-    print('ref_traj: {}'.format(ref_traj[0]))
+      ref_traj[i][0] = nominal_speed*(time_stamp + i*nominal_speed)  # ref_x
+      ref_traj[i][1] = 2.0  # ref_y
+      ref_traj[i][2] = 0.0  # ref_theta
+    
+    diff_ref_traj = np.diff(ref_traj)
+    # print(diff_ref_traj)
     
     return ref_traj
 
@@ -164,6 +177,7 @@ if __name__ == '__main__':
   while not rospy.is_shutdown():
     print('\n\n--- time_stamp: {:.2f}'.format(time_stamp))
     time_stamp += nmpc.dt
+    print('xpose: {}'.format(nmpc.xpose))
     
     # 1. Generate Reference Traj.
     ref_traj = nmpc.generate_ref_traj(time_stamp)    
