@@ -69,6 +69,7 @@ V_a = ca.SX.sym('V_a')
 V_b = ca.SX.sym('V_b')
 V_c = ca.SX.sym('V_c')
 V_d = ca.SX.sym('V_d')
+
 controls = ca.vertcat(
     V_a,
     V_b,
