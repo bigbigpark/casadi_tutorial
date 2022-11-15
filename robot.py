@@ -107,9 +107,11 @@ class MobileRobotNMPC:
       
     # constraint about the velocity
     for i in range(self.N):
-      vel = self.opt_controls[i,:]
-      self.opti.subject_to(self.opti.bounded(self.min_v, vel[0], self.max_v))
-      self.opti.subject_to(self.opti.bounded(self.min_w, vel[1], self.max_w))
+      self.opti.subject_to(self.opti.bounded(self.min_v, v, self.max_v))
+      self.opti.subject_to(self.opti.bounded(self.min_w, w, self.max_w))
+      
+    ## TODO
+    ## 1. 장애물 회피
       
     # solver options
     options = {
