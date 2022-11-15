@@ -3,6 +3,7 @@ import rospy
 import casadi as ca
 import numpy as np
 import math
+import time
 
 import utilities
 from nav_msgs.msg import Odometry
@@ -134,8 +135,11 @@ class MobileRobotNMPC:
     sol = self.opti.solve()
     
     cmd_vel = sol.value(self.opt_controls)
+    self.next_states = sol.value(self.opt_states)
     
-    return cmd_vel
+    v = cmd_vel[0][0]
+    w = cmd_vel[0][1]
+    return v, w
 
   def generate_ref_traj(self, time_stamp):
     ref_traj = np.zeros((self.N+1, 3))
@@ -145,7 +149,7 @@ class MobileRobotNMPC:
       ref_traj[i,0] = nominal_speed*(time_stamp + i*nominal_speed)  # ref_x
       ref_traj[i,1] = 0.0  # ref_y
       ref_traj[i,2] = 0.0  # ref_theta
-    # print(ref_traj)
+    print('ref_traj: {}'.format(ref_traj[0]))
     
     return ref_traj
 
@@ -158,18 +162,22 @@ if __name__ == '__main__':
   
   time_stamp = 0.0
   while not rospy.is_shutdown():
-    print('time_stamp: {}'.format(time_stamp))
+    print('\n\n--- time_stamp: {:.2f}'.format(time_stamp))
     time_stamp += nmpc.dt
     
     # 1. Generate Reference Traj.
     ref_traj = nmpc.generate_ref_traj(time_stamp)    
     
     # 2. Optimize the Traj.
-    cmd_vel = nmpc.solve(ref_traj)
+    t_opt = time.time()
+    v, w = nmpc.solve(ref_traj)
+    print('t_opt: {:.2f} ms'.format( 1000*(time.time() - t_opt)) )
     
+    print('v: {:.2f}'.format(v))
+    print('w: {:.2f}'.format(w))
     cmd_vel_msg = Twist()
-    cmd_vel_msg.linear.x = cmd_vel[0][0]
-    cmd_vel_msg.angular.z = cmd_vel[0][1]
+    cmd_vel_msg.linear.x = v
+    cmd_vel_msg.angular.z = w
     nmpc.cmd_vel_pub_.publish(cmd_vel_msg)
     
     nmpc.r.sleep()
